@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+build/
+dist/
+
+# Generated graphs / trained models / exports
+data/*
+!data/.gitkeep
+
+# C build artifacts
+engine/*.so
+engine/*.o
+engine/test_engine
+engine/build/

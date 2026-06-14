@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wordnet-embeddings"
+version = "0.0.1"
+description = "From-scratch knowledge-graph embeddings trained on WordNet, for constrained hardware (Level 0 of green-ai's custom embeddings research)"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.10"
+dependencies = [
+    "pykeen",
+    "nltk",
+    "numpy",
+]
+
+[tool.setuptools.packages.find]
+include = ["wordnet_embeddings*"]
