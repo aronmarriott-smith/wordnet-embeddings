@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Train WordNet embeddings (TransE, 128-dim, 200 epochs by default).
 #
-# Quick smoke-test (1 epoch):   ./train.sh --epochs 1
-# Full training run (~5-20min): ./train.sh
+# Quick smoke-test (1 epoch):              ./train.sh --epochs 1
+# Full training run (~90s, no eval):       ./train.sh
+# With evaluation (GPU recommended):       ./train.sh --evaluate
 set -e
 cd "$(dirname "${BASH_SOURCE[0]}")"
 

@@ -29,6 +29,7 @@ def train(
     triples_path: Path = DEFAULT_TRIPLES,
     output_path: Path = DEFAULT_OUTPUT,
     num_epochs: int = NUM_EPOCHS,
+    evaluate: bool = False,
 ) -> None:
     from pykeen.pipeline import pipeline
     from pykeen.triples import TriplesFactory
@@ -36,12 +37,24 @@ def train(
     log.info("Loading triples from %s ...", triples_path)
     tf = TriplesFactory.from_path(triples_path)
 
-    # 80/10/10 train/validation/test split
-    training, validation, testing = tf.split([0.8, 0.1, 0.1], random_state=42)
+    if evaluate:
+        # 80/10/10 split needed for held-out evaluation.
+        # Evaluation scores every test triple against all 117k entities —
+        # fast on GPU (CUDA auto-detected), ~1hr on CPU.
+        training, validation, testing = tf.split([0.8, 0.1, 0.1], random_state=42)
+        log.info(
+            "Split: %d train / %d valid / %d test",
+            training.num_triples, validation.num_triples, testing.num_triples,
+        )
+    else:
+        # Train on all triples — better for a final model since no data is
+        # reserved for evaluation splits we aren't using.
+        training, validation, testing = tf, None, None
+        log.info("Evaluation disabled; training on all %d triples", tf.num_triples)
+
     log.info(
-        "Split: %d train / %d valid / %d test | %d entities | %d relations",
-        training.num_triples, validation.num_triples, testing.num_triples,
-        tf.num_entities, tf.num_relations,
+        "%d entities | %d relations | %d dims | %d epochs",
+        tf.num_entities, tf.num_relations, EMBED_DIM, num_epochs,
     )
 
     result = pipeline(
@@ -77,11 +90,13 @@ def train(
     np.save(output_path / "entity_embeddings.npy", embeddings)
 
     log.info("Saved model, entity_to_id.json, entity_embeddings.npy -> %s", output_path)
-    log.info(
-        "Hits@10: %.4f | MRR: %.4f",
-        result.get_metric("hits@10"),
-        result.get_metric("mean_reciprocal_rank"),
-    )
+
+    if evaluate:
+        log.info(
+            "Hits@10: %.4f | MRR: %.4f",
+            result.get_metric("hits@10"),
+            result.get_metric("mean_reciprocal_rank"),
+        )
 
 
 def main() -> None:
@@ -92,8 +107,12 @@ def main() -> None:
         "--epochs", type=int, default=NUM_EPOCHS,
         help=f"Training epochs (default: {NUM_EPOCHS}). Use --epochs 1 to smoke-test.",
     )
+    parser.add_argument(
+        "--evaluate", action="store_true",
+        help="Run ranking evaluation after training. Fast on GPU (CUDA auto-detected); ~1hr on CPU.",
+    )
     args = parser.parse_args()
-    train(args.triples, args.output, args.epochs)
+    train(args.triples, args.output, args.epochs, args.evaluate)
 
 
 if __name__ == "__main__":
