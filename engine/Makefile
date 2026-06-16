@@ -18,13 +18,13 @@ all: lib
 lib: libembed.so
 
 libembed.so: $(SRC) include/embed.h
-	$(CC) $(CFLAGS) -shared -o $@ $(SRC)
+	$(CC) $(CFLAGS) -shared -o $@ $(SRC) -lm
 
 test: test_engine
 	./test_engine
 
 test_engine: $(TEST_SRC) $(SRC) include/embed.h
-	$(CC) $(CFLAGS) -o $@ $(TEST_SRC) $(SRC)
+	$(CC) $(CFLAGS) -o $@ $(TEST_SRC) $(SRC) -lm
 
 clean:
 	rm -f libembed.so test_engine

@@ -23,8 +23,9 @@ extern "C" {
 /* Opaque handle to a loaded embedding table. */
 typedef struct embed_model embed_model;
 
-/* Load the embedding table at `path` (mmap'd). Returns NULL on failure. */
-embed_model *embed_load(const char *path);
+/* Load the embedding table from `dir` (expects dir/embeddings.bin and dir/vocab.txt).
+ * Returns NULL on failure. */
+embed_model *embed_load(const char *dir);
 
 /* Free resources associated with `model`. */
 void embed_free(embed_model *model);
