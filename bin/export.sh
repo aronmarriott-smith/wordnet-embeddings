@@ -11,5 +11,8 @@ if [ ! -d "venv" ]; then
     $PYTHON -m venv venv
 fi
 
-venv/bin/pip install -q -r requirements.txt
-venv/bin/python -m wordnet_embeddings.export "$@"
+VENV_BIN=venv/bin
+[ -f "$VENV_BIN/python" ] || VENV_BIN=venv/Scripts
+
+"$VENV_BIN/pip" install -q -r requirements.txt
+"$VENV_BIN/python" -m wordnet_embeddings.export "$@"
