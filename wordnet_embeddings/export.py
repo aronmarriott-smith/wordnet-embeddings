@@ -30,23 +30,24 @@ from pathlib import Path
 
 import numpy as np
 
-MAGIC = b"WNEB"
-UNDEFINED_LEMMA = "undefined"
-
-DEFAULT_MODEL = Path("data/model")
-DEFAULT_LEMMA_MAP = Path("data/lemma_synsets.tsv")
-DEFAULT_VOCAB_OUT = Path("data/vocab.txt")
-DEFAULT_EMBED_OUT = Path("data/embeddings.bin")
+from wordnet_embeddings.config import (
+    EMBED_PATH,
+    LEMMA_MAP_PATH,
+    MODEL_DIR,
+    UNDEFINED_LEMMA,
+    VOCAB_PATH,
+    WNEB_MAGIC,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger(__name__)
 
 
 def export(
-    model_path: Path = DEFAULT_MODEL,
-    lemma_map_path: Path = DEFAULT_LEMMA_MAP,
-    vocab_out: Path = DEFAULT_VOCAB_OUT,
-    embed_out: Path = DEFAULT_EMBED_OUT,
+    model_path: Path = MODEL_DIR,
+    lemma_map_path: Path = LEMMA_MAP_PATH,
+    vocab_out: Path = VOCAB_PATH,
+    embed_out: Path = EMBED_PATH,
 ) -> None:
     # --- Load trained synset embeddings ---
     embeddings = np.load(model_path / "entity_embeddings.npy")  # (num_entities, EMBED_DIM)
@@ -102,7 +103,7 @@ def export(
     # Header: magic(4) + vocab_size(4) + embed_dim(4) + scale(4) = 16 bytes
     embed_out.parent.mkdir(parents=True, exist_ok=True)
     with embed_out.open("wb") as f:
-        f.write(MAGIC)
+        f.write(WNEB_MAGIC)
         f.write(struct.pack("<IIf", vocab_size, embed_dim, scale))
         f.write(quantised.tobytes())  # row-major int8 array
     log.info("Wrote %s (%.1f KB)", embed_out, embed_out.stat().st_size / 1024)
@@ -110,10 +111,10 @@ def export(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", type=Path, default=DEFAULT_MODEL)
-    parser.add_argument("--lemma-map", type=Path, default=DEFAULT_LEMMA_MAP)
-    parser.add_argument("--vocab-out", type=Path, default=DEFAULT_VOCAB_OUT)
-    parser.add_argument("--embed-out", type=Path, default=DEFAULT_EMBED_OUT)
+    parser.add_argument("--model", type=Path, default=MODEL_DIR)
+    parser.add_argument("--lemma-map", type=Path, default=LEMMA_MAP_PATH)
+    parser.add_argument("--vocab-out", type=Path, default=VOCAB_PATH)
+    parser.add_argument("--embed-out", type=Path, default=EMBED_PATH)
     args = parser.parse_args()
     export(args.model, args.lemma_map, args.vocab_out, args.embed_out)
 

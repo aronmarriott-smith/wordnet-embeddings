@@ -21,8 +21,7 @@ import logging
 from collections.abc import Callable
 from pathlib import Path
 
-DEFAULT_OUTPUT = Path("data/triples.tsv")
-DEFAULT_LEMMA_MAP_OUTPUT = Path("data/lemma_synsets.tsv")
+from wordnet_embeddings.config import LEMMA_MAP_PATH, TRIPLES_PATH
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger(__name__)
@@ -70,7 +69,7 @@ def ensure_wordnet() -> None:
 
 
 def build_triples(
-    output_path: Path = DEFAULT_OUTPUT,
+    output_path: Path = TRIPLES_PATH,
     relations: dict[str, Callable] | None = None,
     log_every: int = 20_000,
 ) -> int:
@@ -117,7 +116,7 @@ def build_triples(
 
 
 def build_lemma_synset_map(
-    output_path: Path = DEFAULT_LEMMA_MAP_OUTPUT,
+    output_path: Path = LEMMA_MAP_PATH,
 ) -> int:
     """Write a lemma -> synset_id mapping to output_path as TSV.
 
@@ -153,12 +152,12 @@ def build_lemma_synset_map(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--output", type=Path, default=DEFAULT_OUTPUT,
-        help=f"Triples TSV output path (default: {DEFAULT_OUTPUT})",
+        "--output", type=Path, default=TRIPLES_PATH,
+        help=f"Triples TSV output path (default: {TRIPLES_PATH})",
     )
     parser.add_argument(
-        "--lemma-map-output", type=Path, default=DEFAULT_LEMMA_MAP_OUTPUT,
-        help=f"Lemma-synset map output path (default: {DEFAULT_LEMMA_MAP_OUTPUT})",
+        "--lemma-map-output", type=Path, default=LEMMA_MAP_PATH,
+        help=f"Lemma-synset map output path (default: {LEMMA_MAP_PATH})",
     )
     parser.add_argument(
         "--skip-lemma-map", action="store_true",

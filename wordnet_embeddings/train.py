@@ -1,4 +1,4 @@
-"""Train 128-dim TransE knowledge-graph embeddings on WordNet triples.
+"""Train TransE knowledge-graph embeddings on WordNet triples.
 
 Usage::
 
@@ -15,19 +15,15 @@ from pathlib import Path
 
 import numpy as np
 
-EMBED_DIM = 128   # our own embedding space, not tied to any other model
-NUM_EPOCHS = 200
-
-DEFAULT_TRIPLES = Path("data/triples.tsv")
-DEFAULT_OUTPUT = Path("data/model")
+from wordnet_embeddings.config import EMBED_DIM, MODEL_DIR, NUM_EPOCHS, TRIPLES_PATH
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger(__name__)
 
 
 def train(
-    triples_path: Path = DEFAULT_TRIPLES,
-    output_path: Path = DEFAULT_OUTPUT,
+    triples_path: Path = TRIPLES_PATH,
+    output_path: Path = MODEL_DIR,
     num_epochs: int = NUM_EPOCHS,
     evaluate: bool = False,
 ) -> None:
@@ -115,8 +111,8 @@ def train(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--triples", type=Path, default=DEFAULT_TRIPLES)
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--triples", type=Path, default=TRIPLES_PATH)
+    parser.add_argument("--output", type=Path, default=MODEL_DIR)
     parser.add_argument(
         "--epochs", type=int, default=NUM_EPOCHS,
         help=f"Training epochs (default: {NUM_EPOCHS}). Use --epochs 1 to smoke-test.",
