@@ -59,6 +59,13 @@ def train(
         random_seed=42,
     )
 
+    # The low-level Model/TrainingLoop API (unlike pykeen's pipeline() helper)
+    # never moves the model off its initial device on its own, so without this
+    # it silently trains on CPU even when CUDA is available.
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = model.to(device)
+    log.info("Training on device: %s", device)
+
     optimizer = torch.optim.Adam(model.parameters())  # adaptive lr; SGD is the simpler alternative
 
     # SLCWATrainingLoop = Stochastic Local Closed World Assumption,
