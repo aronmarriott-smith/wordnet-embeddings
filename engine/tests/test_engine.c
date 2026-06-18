@@ -20,10 +20,14 @@
 
 static const uint32_t FX_DIM   = 4;
 static const float    FX_SCALE = 1.0f / 127.0f;
-static const char    *fx_dir   = "/tmp/embed_test_fixture";
+static const char    *fx_dir   = "embed_test_fixture";
 
 static void write_fixture(void) {
+#ifdef _WIN32
+    mkdir(fx_dir);
+#else
     mkdir(fx_dir, 0700);
+#endif
 
     char p[512];
 
@@ -52,7 +56,12 @@ static void write_fixture(void) {
 }
 
 static void cleanup_fixture(void) {
-    system("rm -rf /tmp/embed_test_fixture");
+    char p[512];
+    snprintf(p, sizeof p, "%s/vocab.txt", fx_dir);
+    remove(p);
+    snprintf(p, sizeof p, "%s/embeddings.bin", fx_dir);
+    remove(p);
+    remove(fx_dir);
 }
 
 static float l2norm(const float *v, uint32_t n) {

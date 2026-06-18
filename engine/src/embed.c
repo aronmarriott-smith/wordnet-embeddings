@@ -3,15 +3,20 @@
 #include "embed.h"
 
 #include <ctype.h>
-#include <fcntl.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#endif
 
 #define WNEB_MAGIC  "WNEB"
 #define HEADER_SIZE 16  /* magic(4) + vocab_size(4) + embed_dim(4) + scale(4) */
@@ -61,14 +66,29 @@ static uint32_t ht_get(const ht *t, const char *key) {
 /* ---- model ---- */
 
 struct embed_model {
-    void         *map;       /* mmap of embeddings.bin */
+    void         *map;       /* mmap/MapViewOfFile of embeddings.bin */
     size_t        map_size;
     const int8_t *table;     /* int8[vocab_size * embed_dim] within map */
     uint32_t      vocab_size;
     uint32_t      embed_dim;
     float         scale;     /* dequantise: float_val = int8_val * scale */
     ht            vocab;     /* lemma -> row index */
+#ifdef _WIN32
+    HANDLE        hfile;
+    HANDLE        hmap;
+#endif
 };
+
+/* Releases the mapping/handles set up by embed_load; safe on a zeroed struct. */
+static void unmap_file(embed_model *m) {
+#ifdef _WIN32
+    if (m->map) UnmapViewOfFile(m->map);
+    if (m->hmap) CloseHandle(m->hmap);
+    if (m->hfile && m->hfile != INVALID_HANDLE_VALUE) CloseHandle(m->hfile);
+#else
+    if (m->map && m->map != MAP_FAILED) munmap(m->map, m->map_size);
+#endif
+}
 
 /* ---- public API ---- */
 
@@ -79,6 +99,24 @@ embed_model *embed_load(const char *dir) {
     char path[4096];
     snprintf(path, sizeof path, "%s/embeddings.bin", dir);
 
+#ifdef _WIN32
+    HANDLE hfile = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, NULL,
+                                OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hfile == INVALID_HANDLE_VALUE) { free(m); return NULL; }
+
+    LARGE_INTEGER size;
+    if (!GetFileSizeEx(hfile, &size)) { CloseHandle(hfile); free(m); return NULL; }
+    m->map_size = (size_t)size.QuadPart;
+
+    HANDLE hmap = CreateFileMappingA(hfile, NULL, PAGE_READONLY, 0, 0, NULL);
+    if (!hmap) { CloseHandle(hfile); free(m); return NULL; }
+
+    m->map = MapViewOfFile(hmap, FILE_MAP_READ, 0, 0, 0);
+    if (!m->map) { CloseHandle(hmap); CloseHandle(hfile); free(m); return NULL; }
+
+    m->hfile = hfile;
+    m->hmap  = hmap;
+#else
     int fd = open(path, O_RDONLY);
     if (fd < 0) { free(m); return NULL; }
 
@@ -89,10 +127,11 @@ embed_model *embed_load(const char *dir) {
     m->map = mmap(NULL, m->map_size, PROT_READ, MAP_PRIVATE, fd, 0);
     close(fd);
     if (m->map == MAP_FAILED) { free(m); return NULL; }
+#endif
 
     const unsigned char *p = (const unsigned char *)m->map;
     if (m->map_size < HEADER_SIZE || memcmp(p, WNEB_MAGIC, 4) != 0) {
-        munmap(m->map, m->map_size); free(m); return NULL;
+        unmap_file(m); free(m); return NULL;
     }
     memcpy(&m->vocab_size, p + 4,  4);
     memcpy(&m->embed_dim,  p + 8,  4);
@@ -103,7 +142,7 @@ embed_model *embed_load(const char *dir) {
     FILE *f = fopen(path, "r");
     if (!f || ht_init(&m->vocab, m->vocab_size) < 0) {
         if (f) fclose(f);
-        munmap(m->map, m->map_size); free(m); return NULL;
+        unmap_file(m); free(m); return NULL;
     }
 
     char line[512];
@@ -121,7 +160,7 @@ embed_model *embed_load(const char *dir) {
 void embed_free(embed_model *m) {
     if (!m) return;
     ht_free(&m->vocab);
-    if (m->map && m->map != MAP_FAILED) munmap(m->map, m->map_size);
+    unmap_file(m);
     free(m);
 }
 

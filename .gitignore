@@ -14,4 +14,5 @@ data/*
 engine/*.so
 engine/*.o
 engine/test_engine
+engine/test_engine.exe
 engine/build/
