@@ -16,3 +16,4 @@ LEMMA_MAP_PATH = Path("data/lemma_synsets.tsv")
 MODEL_DIR      = Path("data/model")
 VOCAB_PATH     = Path("data/vocab.txt")
 EMBED_PATH     = Path("data/embeddings.bin")
+ST_EXPORT_DIR  = Path("data/sentence_transformers")  # MTEB/sentence-transformers-loadable export

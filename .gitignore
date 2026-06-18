@@ -16,3 +16,7 @@ engine/*.o
 engine/test_engine
 engine/test_engine.exe
 engine/build/
+
+# mteb's raw per-run dump (overwritten every run, not a history) — the
+# timestamped benchmarks/sts_summary_*.json files are the tracked history.
+benchmarks/raw/

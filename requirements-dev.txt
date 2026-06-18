@@ -1,2 +1,9 @@
 -r requirements.txt
 pytest
+mteb
+sentence-transformers
+# pyarrow>=22 (pulled in transitively by datasets) crashes on import on at
+# least one Windows dev machine (OSError WinError 6714, a Dropbox/Defender
+# filter-driver interaction with its delvewheel DLL-loading patch). Pin to
+# the lowest version datasets accepts until upstream fixes it.
+pyarrow==21.0.0
