@@ -29,16 +29,18 @@ there, included as a git submodule of green-ai.
 ## Layout
 
 ```
-wordnet_embeddings/   # Python: graph extraction, training, export
+wordnet_embeddings/   # Python: graph extraction, training, export, benchmarking
 engine/               # C inference engine + its own test suite
 tests/                # Python integration tests (ctypes <-> engine)
 data/                 # Generated graphs/models/exports (gitignored)
+benchmarks/           # Tracked MTEB STS results (benchmarks/raw/ is gitignored)
 ```
 
 ## Status
 
-🚧 **Scaffolding only.** Nothing here trains or runs yet — see the `TODO`
-comments in each module, and the checklist below.
+The full pipeline works end-to-end: graph extraction → training (CPU or
+GPU) → export → C engine inference, plus an MTEB benchmarking path. See
+`bin/` for the runnable scripts and Usage below.
 
 ## Setup
 
@@ -49,24 +51,71 @@ pip install -r requirements-dev.txt
 python3 -c "import nltk; nltk.download('wordnet')"
 ```
 
+## Usage
+
+Each step is a `bin/*.sh` script — run from the repo root, in order:
+
+```bash
+bin/build_graph.sh   # WordNet -> data/triples.tsv + data/lemma_synsets.tsv
+bin/train.sh         # TransE training -> data/model/ (--epochs N for a quick smoke-test)
+bin/export.sh        # data/model/ -> data/vocab.txt + data/embeddings.bin (the C engine's format)
+bin/test.sh          # builds engine/libembed.so, runs the ctypes integration tests
+```
+
+`bin/train.sh` auto-detects an NVIDIA GPU (`nvidia-smi` on PATH) and
+installs CUDA-enabled torch if present; falls back to CPU otherwise.
+
+### Benchmarking (MTEB STS)
+
+The model can be evaluated against MTEB's English Semantic Textual
+Similarity (STS) task family — the closest standard, comparable-across-models
+benchmark for a static, mean-pooled lemma embedding like this one (see
+`docs/CUSTOM_EMBEDDINGS_RESEARCH.md` Part 5 for why MTEB/`sentence-transformers`
+compatibility was the chosen evaluation path).
+
+```bash
+bin/export_sentence_transformer.sh   # data/vocab.txt + embeddings.bin -> data/sentence_transformers/
+bin/benchmark.sh                     # runs MTEB's English STS tasks against it
+```
+
+This writes a timestamped `benchmarks/sts_summary_<UTC timestamp>.json`
+(committed — this is the cross-iteration tracking history; `benchmarks/raw/`,
+mteb's detailed per-task dump, is regenerated each run and gitignored).
+
+**Reading the scores:** these are Spearman-correlation-based STS scores
+(0-1), the standard metric, but this model isn't competing on the usual
+leaderboard terms. It's a static, mean-pooled, closed-WordNet-vocabulary
+embedding (architecturally closer to word2vec/GloVe than to a transformer
+embedding model), and `embed_text()` doesn't lemmatise yet (see
+`docs/CUSTOM_EMBEDDINGS_RESEARCH.md` Part 1) — so inflected words miss the
+vocab and fall back to the `undefined` entry. Modern transformer embedding
+models score 0.80-0.90+ on the same tasks; ~0.35 is this architecture's
+current baseline, not a bug. The summary file's value is in tracking *this
+model's own* improvement across iterations (e.g. after adding lemmatisation,
+gloss-text retrofitting, or a larger `EMBED_DIM`), not chasing that absolute
+number.
+
 ## Open items
 
 (mirrors the "Open questions / next steps" list in
 `CUSTOM_EMBEDDINGS_RESEARCH.md`)
 
-- [ ] Decide which WordNet relation types to include as graph edges
-- [ ] Implement `wordnet_embeddings/build_graph.py` — export WordNet synsets
+- [x] Decide which WordNet relation types to include as graph edges
+- [x] Implement `wordnet_embeddings/build_graph.py` — export WordNet synsets
       + relations as PyKEEN-compatible triples
-- [ ] Implement `wordnet_embeddings/train.py` — 128-dim TransE training via
+- [x] Implement `wordnet_embeddings/train.py` — 128-dim TransE training via
       PyKEEN
-- [ ] Design the binary embedding-table format (int8, header, `undefined`
+- [x] Design the binary embedding-table format (int8, header, `undefined`
       entry, mmap-friendly) and implement `wordnet_embeddings/export.py`
-- [ ] Export WordNet's lemmatisation rules for the C engine's tokeniser
-- [ ] Implement `engine/src/embed.c` (tokenise, lookup, pool, normalise)
+- [ ] Export WordNet's lemmatisation rules for the C engine's tokeniser —
+      `embed_text()` currently tokenises but doesn't lemmatise; see the
+      Benchmarking section above
+- [x] Implement `engine/src/embed.c` (tokenise, lookup, pool, normalise)
       and its test suite (`engine/tests/`, `tests/`)
-- [ ] Cross-compile/smoke-test `engine/` on the Raspberry Pi 2B
-- [ ] Reference exports (word2vec format, `sentence-transformers` directory
-      for MTEB)
+- [ ] Cross-compile/smoke-test `engine/` on the Raspberry Pi 2B (built and
+      tested on Linux/Windows dev machines so far)
+- [x] Reference exports (`sentence-transformers` directory for MTEB) — see
+      `bin/export_sentence_transformer.sh`. word2vec-format export still open.
 
 ## License
 
