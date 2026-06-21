@@ -139,11 +139,19 @@ embedding (architecturally closer to word2vec/GloVe than to a transformer
 embedding model), and `embed_text()` doesn't lemmatise yet (see
 `docs/CUSTOM_EMBEDDINGS_RESEARCH.md` Part 1) — so inflected words miss the
 vocab and fall back to the `undefined` entry. Modern transformer embedding
-models score 0.80-0.90+ on the same tasks; ~0.35 is this architecture's
+models score 0.80-0.90+ on the same tasks; ~0.37 is this architecture's
 current baseline, not a bug. The summary file's value is in tracking *this
 model's own* improvement across iterations (e.g. after adding lemmatisation,
 gloss-text retrofitting, or a larger `EMBED_DIM`), not chasing that absolute
 number.
+
+Only monolingual English STS tasks are run — `languages=["eng"]` alone isn't
+enough, since MTEB includes a task if English is *any* of its language
+pairs, so cross-lingual tasks (STS17, STS22, IndicCrosslingualSTS, ...) were
+sneaking in even though most of their content isn't English (see
+`benchmark.py`'s `is_multilingual` filter). Summary files from before this
+fix (committed history) used the broader task set and aren't directly
+comparable to later runs.
 
 ## Open items
 

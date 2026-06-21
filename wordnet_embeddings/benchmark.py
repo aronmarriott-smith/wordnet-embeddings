@@ -39,7 +39,13 @@ def run_sts_benchmark(model_dir: Path = ST_EXPORT_DIR, output_dir: Path = BENCHM
         )
 
     model = SentenceTransformer(str(model_dir))
-    tasks = mteb.get_tasks(task_types=["STS"], languages=["eng"])
+    # languages=["eng"] alone isn't enough: MTEB includes a task if English is
+    # *any* of its language pairs, so cross-lingual tasks (STS17, STS22, ...)
+    # pass too even though most of their content isn't English. Filtering on
+    # is_multilingual drops those, leaving only monolingual English STS tasks
+    # — the right scope per CUSTOM_EMBEDDINGS_RESEARCH.md's English-only scope.
+    all_tasks = mteb.get_tasks(task_types=["STS"], languages=["eng"])
+    tasks = [t for t in all_tasks if not t.metadata.is_multilingual]
     log.info("Running %d STS tasks: %s", len(tasks), ", ".join(t.metadata.name for t in tasks))
 
     raw_dir = output_dir / "raw"
