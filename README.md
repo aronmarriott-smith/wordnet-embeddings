@@ -188,6 +188,27 @@ comparable to later runs.
       English WordNet, ConceptNet, Wiktionary — see
       `CUSTOM_EMBEDDINGS_RESEARCH.md` Part 6) can be added without touching
       `build_graph.py`. Only `WordNetSource` is implemented so far.
+- [ ] Improve OOV handling with fastText-style character n-gram hashed
+      embeddings (see `CUSTOM_EMBEDDINGS_RESEARCH.md` Part 1, "Future
+      improvement")
+- [ ] Switch to a newer Open English WordNet release (2025+) for proper
+      noun coverage
+- [ ] Add a Docker cross-compile option for the Raspberry Pi target
+      (mirroring `bin/build_windows.ps1`/`.sh` for Windows)
+- [ ] Plan a publishing workflow, including to HuggingFace
+- [ ] Build a common CLI wrapping the separate `bin/*.sh` scripts, for
+      developer experience, maintainability, and future extensibility
+- [ ] Integrate this model back into the parent `green-ai` project as an
+      embeddings option
+- [ ] Implement gloss-text signal (Option B/C, "Level 0.5" — see
+      `CUSTOM_EMBEDDINGS_RESEARCH.md` Parts 1 and 6)
+- [ ] Explore and plan a transformer layer, beyond the current static
+      mean-pooled lemma embedding
+- [ ] Find a suitable name for this model family — "wordnet-embeddings"
+      won't fit once non-WordNet sources/levels are added
+- [ ] Scaffold the "Level 1" decoder/generative model sketched in
+      `CUSTOM_EMBEDDINGS_RESEARCH.md` Part 6, built on this project's
+      foundations
 
 ## License
 
