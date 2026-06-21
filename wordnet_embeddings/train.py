@@ -1,4 +1,7 @@
-"""Train TransE knowledge-graph embeddings on WordNet triples.
+"""Train TransE knowledge-graph embeddings on a build_graph.py triples file.
+
+Source-agnostic: reads whatever (head, relation, tail) triples build_graph.py
+produced, regardless of which GraphSource (wordnet, oewn, ...) wrote them.
 
 Usage::
 
@@ -37,8 +40,9 @@ def train(
 
     if evaluate:
         # 80/10/10 split for held-out evaluation.
-        # Scores every test triple against all 117k entities —
-        # fast on GPU (CUDA auto-detected by PyTorch), ~1hr on CPU.
+        # Scores every test triple against all entities in the graph —
+        # fast on GPU (CUDA auto-detected by PyTorch), ~1hr on CPU at WordNet's
+        # ~117k-entity scale (other sources may be larger or smaller).
         training, _, testing = tf.split([0.8, 0.1, 0.1], random_state=42)
         log.info("Split: %d train / %d test", training.num_triples, testing.num_triples)
     else:
