@@ -79,6 +79,30 @@ def test_build_graph_empty_source_writes_empty_files(tmp_path: Path) -> None:
     assert lemma_map_path.read_text(encoding="utf-8") == ""
 
 
+def test_build_graph_appends_extra_vocab_with_no_relations(tmp_path: Path) -> None:
+    triples_path = tmp_path / "triples.tsv"
+    lemma_map_path = tmp_path / "lemma_synsets.tsv"
+
+    class FakeVocabSource:
+        def ensure_available(self) -> None:
+            pass
+
+        def iter_words(self) -> Iterator[str]:
+            yield from ["the", "a"]
+
+    stats = build_graph(
+        FakeSource(FIXTURE_ENTITIES), triples_path, lemma_map_path,
+        extra_vocab=(FakeVocabSource(),),
+    )
+
+    assert stats == GraphStats(entities=2, triples=1, lemma_rows=5)
+    assert lemma_map_path.read_text(encoding="utf-8") == (
+        "cat\tcat.n.01\ntrue_cat\tcat.n.01\nfeline\tfeline.n.01\nthe\tthe\na\ta\n"
+    )
+    # Extra-vocab words don't get their own triples — only the graph source's do.
+    assert triples_path.read_text(encoding="utf-8") == "cat.n.01\thypernym\tfeline.n.01\n"
+
+
 def test_get_source_returns_registered_source() -> None:
     assert type(get_source("wordnet")).__name__ == "WordNetSource"
     assert type(get_source("oewn")).__name__ == "OpenEnglishWordNetSource"

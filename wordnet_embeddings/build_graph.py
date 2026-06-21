@@ -22,7 +22,14 @@ from pathlib import Path
 from typing import NamedTuple
 
 from wordnet_embeddings.config import LEMMA_MAP_PATH, TRIPLES_PATH
-from wordnet_embeddings.sources import SOURCES, GraphSource, get_source
+from wordnet_embeddings.sources import (
+    SOURCES,
+    VOCAB_SOURCES,
+    GraphSource,
+    VocabSource,
+    get_source,
+    get_vocab_source,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger(__name__)
@@ -39,6 +46,7 @@ def build_graph(
     triples_path: Path = TRIPLES_PATH,
     lemma_map_path: Path = LEMMA_MAP_PATH,
     log_every: int = 20_000,
+    extra_vocab: tuple[VocabSource, ...] = (),
 ) -> GraphStats:
     """Write source's triples and lemma map in a single pass over its entities.
 
@@ -51,6 +59,10 @@ def build_graph(
         triples_path: destination for the (head, relation, tail) TSV.
         lemma_map_path: destination for the (lemma, entity_id) TSV.
         log_every: log progress every N entities.
+        extra_vocab: additional VocabSources whose words are appended to the
+            lemma map with no relations (entity_id == the word itself). See
+            wordnet_embeddings/sources/vocab.py for why this currently has no
+            effect on the trained embedding table.
 
     Returns:
         GraphStats(entities, triples, lemma_rows) processed/written.
@@ -79,6 +91,17 @@ def build_graph(
             if entities % log_every == 0:
                 log.info("  %d entities processed, %d triples so far", entities, triples)
 
+        for vocab_source in extra_vocab:
+            vocab_words = 0
+            for word in vocab_source.iter_words():
+                lemma_f.write(f"{word}\t{word}\n")
+                lemma_rows += 1
+                vocab_words += 1
+            log.info(
+                "  +%d lemma rows from %s (no relations; falls back to 'undefined' at export time)",
+                vocab_words, type(vocab_source).__name__,
+            )
+
     triples_tmp.replace(triples_path)
     lemma_map_tmp.replace(lemma_map_path)
 
@@ -96,6 +119,14 @@ def main() -> None:
         help="Graph source to extract from (default: wordnet)",
     )
     parser.add_argument(
+        "--extra-vocab", nargs="*", choices=sorted(VOCAB_SOURCES), default=(),
+        help=(
+            "Vocabulary-only sources to append to the lemma map, no relations "
+            "(default: none). These lemmas have no trained embedding of their "
+            "own and fall back to 'undefined' at export time."
+        ),
+    )
+    parser.add_argument(
         "--output", type=Path, default=TRIPLES_PATH,
         help=f"Triples TSV output path (default: {TRIPLES_PATH})",
     )
@@ -107,7 +138,12 @@ def main() -> None:
 
     source = get_source(args.source)
     source.ensure_available()
-    build_graph(source, args.output, args.lemma_map_output)
+
+    extra_vocab = tuple(get_vocab_source(name) for name in args.extra_vocab)
+    for vocab_source in extra_vocab:
+        vocab_source.ensure_available()
+
+    build_graph(source, args.output, args.lemma_map_output, extra_vocab=extra_vocab)
 
 
 if __name__ == "__main__":
