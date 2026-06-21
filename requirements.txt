@@ -1,4 +1,5 @@
 pykeen
 nltk
+wn
 numpy<2
 pytest

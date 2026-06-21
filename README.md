@@ -101,7 +101,13 @@ Desktop.
 | `--source` | Data | Relations |
 |---|---|---|
 | `wordnet` (default) | NLTK's Princeton WordNet 3.0 | hypernym/hyponym/meronym/etc. (22 types) |
-| `oewn` | [Open English WordNet](https://github.com/globalwordnet/english-wordnet), via NLTK's `english_wordnet` package | same relation set — same Synset API as Princeton WordNet |
+| `oewn` | [Open English WordNet](https://github.com/globalwordnet/english-wordnet) 2025+, via the [`wn`](https://pypi.org/project/wn/) package | 19 of the 22 WordNet relation types map across (different native names — see `sources/open_english_wordnet.py`), plus 4 with no Princeton WordNet equivalent (`is_caused_by`, `is_entailed_by`, `exemplifies`, `is_exemplified_by`); no `verb_group`/`usage_domain` (don't exist in this data model) |
+
+`oewn` was switched from NLTK's bundled `english_wordnet` snapshot to the
+`wn` package's `oewn:2025+` release for substantially better proper-noun
+coverage (verified: "Paris", "Shakespeare", "NASA", etc. all resolve to
+synsets, where the older snapshot was sparser here). `wn` manages its own
+local data store independent of `nltk_data`.
 
 Adding another English lexical graph means implementing the `GraphSource`
 protocol in a new module under `wordnet_embeddings/sources/` and registering
@@ -191,8 +197,8 @@ comparable to later runs.
 - [ ] Improve OOV handling with fastText-style character n-gram hashed
       embeddings (see `CUSTOM_EMBEDDINGS_RESEARCH.md` Part 1, "Future
       improvement")
-- [ ] Switch to a newer Open English WordNet release (2025+) for proper
-      noun coverage
+- [x] Switch `oewn` to a newer Open English WordNet release (2025+, via the
+      `wn` package) for proper noun coverage
 - [ ] Add a Docker cross-compile option for the Raspberry Pi target
       (mirroring `bin/build_windows.ps1`/`.sh` for Windows)
 - [ ] Plan a publishing workflow, including to HuggingFace
