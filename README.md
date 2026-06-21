@@ -59,7 +59,7 @@ Each step is a `bin/*.sh` script — run from the repo root, in order:
 bin/build_graph.sh   # graph source -> data/triples.tsv + data/lemma_synsets.tsv
 bin/train.sh         # TransE training -> data/model/ (--epochs N for a quick smoke-test)
 bin/export.sh        # data/model/ -> data/vocab.txt + data/embeddings.bin (the C engine's format)
-bin/test.sh          # builds engine/libembed.so, runs the ctypes integration tests
+bin/test.sh          # builds engine/libembed.so (Linux/macOS only — see Windows note below), runs the ctypes integration tests
 ```
 
 `bin/train.sh` auto-detects an NVIDIA GPU (`nvidia-smi` on PATH) and
@@ -67,23 +67,32 @@ installs CUDA-enabled torch if present; falls back to CPU otherwise.
 
 ### Building the C engine on Windows
 
-Native Windows MinGW (`engine/Makefile`, used by `bin/test.sh`) has repeatedly
-hit environment issues on this project (PATH loss, temp-directory resolution
-failures deep in gcc's own subprocess spawning). **Recommended:** cross-compile
-from a Linux Docker container instead — same toolchain family, no native
-Windows gcc involved:
+Native Windows MinGW (`engine/Makefile`) has repeatedly hit environment
+issues on this project (PATH loss, temp-directory resolution failures deep in
+gcc's own subprocess spawning). Because of that, `bin/test.sh`/`pytest
+tests/` do **not** try to auto-build the engine on Windows (see
+`ENGINE_BUILD_COMMAND` in `wordnet_embeddings/config.py`) — they just use
+whatever `engine/libembed.so` already exists, and fail with a clear message
+telling you to build it yourself if it's missing. (Linux/macOS still
+auto-rebuild via `make lib` on every test run, since that path is reliable
+there.)
+
+**To actually build `engine/libembed.so` on Windows**, cross-compile from a
+Linux Docker container instead — same toolchain family, no native Windows gcc
+involved:
 
 ```powershell
 .\bin\build_windows.ps1   # or bin/build_windows.sh from Git Bash
 ```
 
-This builds a small Debian + `gcc-mingw-w64-x86-64` image
-(`engine/Dockerfile.windows`) and runs `make CC=x86_64-w64-mingw32-gcc lib`
-with `engine/` bind-mounted, so the output (`engine/libembed.so` — a real
-Windows PE DLL, named `.so` to match the project's ctypes-loading convention)
-lands directly on the host. Builds the library only — the resulting `.exe`
-can't run inside the Linux container, so verify it for real afterwards via
-`pytest tests/` or `bin/test.sh` on Windows. Requires Docker Desktop.
+Run this first, before `bin/test.sh`. It builds a small Debian +
+`gcc-mingw-w64-x86-64` image (`engine/Dockerfile.windows`) and runs `make
+CC=x86_64-w64-mingw32-gcc lib` with `engine/` bind-mounted, so the output (a
+real Windows PE DLL, named `.so` to match the project's ctypes-loading
+convention) lands directly on the host. Builds the library only — the
+resulting `.exe` can't run inside the Linux container, so verify it for real
+afterwards via `bin/test.sh` or `pytest tests/` on Windows. Requires Docker
+Desktop.
 
 `bin/build_graph.sh` extracts from a pluggable `GraphSource`
 (`wordnet_embeddings/sources/`), selected with `--source` (default
