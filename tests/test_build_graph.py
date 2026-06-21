@@ -81,6 +81,7 @@ def test_build_graph_empty_source_writes_empty_files(tmp_path: Path) -> None:
 
 def test_get_source_returns_registered_source() -> None:
     assert type(get_source("wordnet")).__name__ == "WordNetSource"
+    assert type(get_source("oewn")).__name__ == "OpenEnglishWordNetSource"
 
 
 def test_get_source_rejects_unknown_name() -> None:
@@ -88,5 +89,5 @@ def test_get_source_rejects_unknown_name() -> None:
         get_source("conceptnet")
 
 
-def test_sources_registry_contains_wordnet() -> None:
-    assert "wordnet" in SOURCES
+def test_sources_registry_contains_expected_sources() -> None:
+    assert set(SOURCES) == {"wordnet", "oewn"}

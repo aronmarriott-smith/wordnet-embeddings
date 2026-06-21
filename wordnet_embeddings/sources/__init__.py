@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from wordnet_embeddings.sources.base import EntityRecord, GraphSource
+from wordnet_embeddings.sources.open_english_wordnet import OpenEnglishWordNetSource
 from wordnet_embeddings.sources.wordnet import WordNetSource
 
 SOURCES: dict[str, type[GraphSource]] = {
     "wordnet": WordNetSource,
+    "oewn": OpenEnglishWordNetSource,
 }
 
 
