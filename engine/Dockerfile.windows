@@ -1,0 +1,21 @@
+# Cross-compiles the C inference engine for Windows from a Linux container,
+# sidestepping native-Windows MinGW toolchain/environment issues (PATH loss,
+# temp-directory resolution failures, etc. — see project history).
+#
+# This image is the toolchain only; it doesn't bake in the source. Run it
+# with engine/ bind-mounted (see bin/build_windows.sh or bin/build_windows.ps1)
+# so source changes don't require rebuilding the image.
+#
+# Output: a real Windows PE DLL, just named libembed.so per the project's
+# existing ctypes-loading convention (tests/test_embed_ctypes.py loads it by
+# that name regardless of platform).
+
+FROM debian:bookworm-slim
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        gcc-mingw-w64-x86-64 \
+        make && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /engine
