@@ -56,7 +56,7 @@ python3 -c "import nltk; nltk.download('wordnet')"
 Each step is a `bin/*.sh` script — run from the repo root, in order:
 
 ```bash
-bin/build_graph.sh   # WordNet -> data/triples.tsv + data/lemma_synsets.tsv
+bin/build_graph.sh   # graph source -> data/triples.tsv + data/lemma_synsets.tsv
 bin/train.sh         # TransE training -> data/model/ (--epochs N for a quick smoke-test)
 bin/export.sh        # data/model/ -> data/vocab.txt + data/embeddings.bin (the C engine's format)
 bin/test.sh          # builds engine/libembed.so, runs the ctypes integration tests
@@ -64,6 +64,56 @@ bin/test.sh          # builds engine/libembed.so, runs the ctypes integration te
 
 `bin/train.sh` auto-detects an NVIDIA GPU (`nvidia-smi` on PATH) and
 installs CUDA-enabled torch if present; falls back to CPU otherwise.
+
+### Building the C engine on Windows
+
+Native Windows MinGW (`engine/Makefile`, used by `bin/test.sh`) has repeatedly
+hit environment issues on this project (PATH loss, temp-directory resolution
+failures deep in gcc's own subprocess spawning). **Recommended:** cross-compile
+from a Linux Docker container instead — same toolchain family, no native
+Windows gcc involved:
+
+```powershell
+.\bin\build_windows.ps1   # or bin/build_windows.sh from Git Bash
+```
+
+This builds a small Debian + `gcc-mingw-w64-x86-64` image
+(`engine/Dockerfile.windows`) and runs `make CC=x86_64-w64-mingw32-gcc lib`
+with `engine/` bind-mounted, so the output (`engine/libembed.so` — a real
+Windows PE DLL, named `.so` to match the project's ctypes-loading convention)
+lands directly on the host. Builds the library only — the resulting `.exe`
+can't run inside the Linux container, so verify it for real afterwards via
+`pytest tests/` or `bin/test.sh` on Windows. Requires Docker Desktop.
+
+`bin/build_graph.sh` extracts from a pluggable `GraphSource`
+(`wordnet_embeddings/sources/`), selected with `--source` (default
+`wordnet`):
+
+| `--source` | Data | Relations |
+|---|---|---|
+| `wordnet` (default) | NLTK's Princeton WordNet 3.0 | hypernym/hyponym/meronym/etc. (22 types) |
+| `oewn` | [Open English WordNet](https://github.com/globalwordnet/english-wordnet), via NLTK's `english_wordnet` package | same relation set — same Synset API as Princeton WordNet |
+
+Adding another English lexical graph means implementing the `GraphSource`
+protocol in a new module under `wordnet_embeddings/sources/` and registering
+it in `sources/__init__.py` — no changes needed to `build_graph.py` itself.
+
+`--extra-vocab words stopwords` appends NLTK's flat word lists (Words
+Corpus, Stopwords Corpus) to the lemma map alongside the main source. These
+have no relations, so **they currently have no effect on the trained
+embedding table** — `export.py` only keeps a lemma whose entity got a
+trained embedding (i.e. appeared in at least one triple), so these words
+fall back to the `undefined` OOV vector at export time like any other
+out-of-vocabulary word. Wired in as plumbing for when that changes (e.g.
+once these are tied into relations, or distributional signal is added —
+see `CUSTOM_EMBEDDINGS_RESEARCH.md` Part 6, "Level 0.5").
+
+**Not implemented as sources** (see `CUSTOM_EMBEDDINGS_RESEARCH.md` Part 6):
+Brown, Gutenberg, WebText, and NPS Chat are plain/tagged text corpora with
+no entity relations — they fit a future distributional/co-occurrence
+embedding pipeline ("Level 0.5"), not this triples-graph extractor. The CMU
+Pronouncing Dictionary maps words to phoneme sequences, not entity-to-entity
+relations — revisit only if a phonetic-similarity relation type is wanted.
 
 ### Benchmarking (MTEB STS)
 
@@ -116,6 +166,11 @@ number.
       tested on Linux/Windows dev machines so far)
 - [x] Reference exports (`sentence-transformers` directory for MTEB) — see
       `bin/export_sentence_transformer.sh`. word2vec-format export still open.
+- [x] Generalise `build_graph.py` behind a `GraphSource` protocol
+      (`wordnet_embeddings/sources/`) so other English lexical graphs (Open
+      English WordNet, ConceptNet, Wiktionary — see
+      `CUSTOM_EMBEDDINGS_RESEARCH.md` Part 6) can be added without touching
+      `build_graph.py`. Only `WordNetSource` is implemented so far.
 
 ## License
 
