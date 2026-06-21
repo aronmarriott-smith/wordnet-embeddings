@@ -4,6 +4,7 @@ Tests load engine/libembed.so and verify embed_text() mechanics against a tiny
 synthetic fixture — not the trained model's quality.
 """
 
+import os
 import ctypes
 import math
 import struct
@@ -11,6 +12,8 @@ import subprocess
 from pathlib import Path
 
 import pytest
+
+from wordnet_embeddings.config import ENGINE_BUILD_COMMAND
 
 REPO_ROOT = Path(__file__).parent.parent
 ENGINE_DIR = REPO_ROOT / "engine"
@@ -29,10 +32,19 @@ FX_ROWS  = [[0, 100, 0, 0], [127, 0, 0, 0], [0, 0, 127, 0]]
 
 @pytest.fixture(scope="session")
 def lib():
-    result = subprocess.run(
-        ["make", "lib"], cwd=ENGINE_DIR, capture_output=True, text=True
-    )
-    assert result.returncode == 0, f"make lib failed:\n{result.stderr}"
+    build_command = ENGINE_BUILD_COMMAND.get(os.name)
+    if build_command is not None:
+        result = subprocess.run(
+            build_command, cwd=ENGINE_DIR, capture_output=True, text=True
+        )
+        assert result.returncode == 0, f"{' '.join(build_command)} failed:\n{result.stderr}"
+    elif not ENGINE_LIB.exists():
+        pytest.fail(
+            f"{ENGINE_LIB} does not exist and os.name={os.name!r} has no "
+            "auto-build command configured (see ENGINE_BUILD_COMMAND in "
+            "wordnet_embeddings/config.py). Run bin/build_windows.ps1 "
+            "(or .sh) first."
+        )
 
     so = ctypes.CDLL(str(ENGINE_LIB))
 
