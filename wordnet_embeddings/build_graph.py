@@ -1,156 +1,100 @@
-"""Extract WordNet's synset relation graph as PyKEEN-compatible triples.
+"""Extract a GraphSource's relation triples and lemma map for PyKEEN/export.py.
 
-Each synset becomes a graph entity (identified by NLTK's dotted name,
-e.g. "car.n.01"). Each typed relation between synsets becomes an edge.
-Output format: two-column-header-free TSV (head \\t relation \\t tail)
-readable by PyKEEN's TriplesFactory.from_path().
+Each graph entity becomes a row in the lemma map (one row per lemma it has)
+and a head in zero or more triples. Output format: header-free TSV
+(head \\t relation \\t tail), readable by PyKEEN's TriplesFactory.from_path().
+
+The graph source itself (WordNet today; see wordnet_embeddings/sources/) is
+selected via --source, so a new lexical resource can be added by implementing
+the GraphSource protocol — no changes needed here.
 
 Usage::
 
     python -m wordnet_embeddings.build_graph
-    python -m wordnet_embeddings.build_graph --output data/triples.tsv
-
-Also writes a lemma -> synset mapping used later by export.py to derive
-lemma-level embeddings by averaging per-synset vectors.
+    python -m wordnet_embeddings.build_graph --source wordnet --output data/triples.tsv
 """
 
 from __future__ import annotations
 
 import argparse
 import logging
-from collections.abc import Callable
 from pathlib import Path
+from typing import NamedTuple
 
 from wordnet_embeddings.config import LEMMA_MAP_PATH, TRIPLES_PATH
+from wordnet_embeddings.sources import SOURCES, GraphSource, get_source
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger(__name__)
 
-# All typed WordNet relations, keyed by the name that becomes the relation
-# column in the triples file. Including both directions (e.g. hypernym and
-# hyponym) is standard practice in KGE: they get separate relation embeddings
-# and carry different semantic signal.
-RELATIONS: dict[str, Callable] = {
-    "hypernym":          lambda s: s.hypernyms(),
-    "instance_hypernym": lambda s: s.instance_hypernyms(),
-    "hyponym":           lambda s: s.hyponyms(),
-    "instance_hyponym":  lambda s: s.instance_hyponyms(),
-    "part_meronym":      lambda s: s.part_meronyms(),
-    "part_holonym":      lambda s: s.part_holonyms(),
-    "member_meronym":    lambda s: s.member_meronyms(),
-    "member_holonym":    lambda s: s.member_holonyms(),
-    "substance_meronym": lambda s: s.substance_meronyms(),
-    "substance_holonym": lambda s: s.substance_holonyms(),
-    "attribute":         lambda s: s.attributes(),
-    "also_see":          lambda s: s.also_sees(),
-    "similar_to":        lambda s: s.similar_tos(),
-    "entails":           lambda s: s.entailments(),
-    "causes":            lambda s: s.causes(),
-    "verb_group":        lambda s: s.verb_groups(),
-    "in_topic_domain":   lambda s: s.in_topic_domains(),
-    "in_region_domain":  lambda s: s.in_region_domains(),
-    "in_usage_domain":   lambda s: s.in_usage_domains(),
-    "topic_domain":      lambda s: s.topic_domains(),
-    "region_domain":     lambda s: s.region_domains(),
-    "usage_domain":      lambda s: s.usage_domains(),
-}
+
+class GraphStats(NamedTuple):
+    entities: int
+    triples: int
+    lemma_rows: int
 
 
-def ensure_wordnet() -> None:
-    """Download WordNet corpus if not already present."""
-    import nltk
-    try:
-        from nltk.corpus import wordnet as wn
-        next(wn.all_synsets())
-    except LookupError:
-        log.info("WordNet corpus not found; downloading (one-time setup)...")
-        nltk.download("wordnet")
-        nltk.download("omw-1.4")
-
-
-def build_triples(
-    output_path: Path = TRIPLES_PATH,
-    relations: dict[str, Callable] | None = None,
+def build_graph(
+    source: GraphSource,
+    triples_path: Path = TRIPLES_PATH,
+    lemma_map_path: Path = LEMMA_MAP_PATH,
     log_every: int = 20_000,
-) -> int:
-    """Write synset relation triples to output_path as a tab-separated file.
+) -> GraphStats:
+    """Write source's triples and lemma map in a single pass over its entities.
+
+    Writes go to `<path>.tmp` and are only moved into place (atomic rename)
+    once the full pass succeeds, so a failed/interrupted run never leaves a
+    corrupt or partial file at the real output path.
 
     Args:
-        output_path: destination path (.tsv).
-        relations: dict of {relation_name: synset_method}. Defaults to
-            the module-level RELATIONS (all 22 WordNet relation types).
-        log_every: log progress every N synsets.
+        source: the GraphSource to extract from.
+        triples_path: destination for the (head, relation, tail) TSV.
+        lemma_map_path: destination for the (lemma, entity_id) TSV.
+        log_every: log progress every N entities.
 
     Returns:
-        Total number of triples written.
+        GraphStats(entities, triples, lemma_rows) processed/written.
     """
-    from nltk.corpus import wordnet as wn
+    triples_path.parent.mkdir(parents=True, exist_ok=True)
+    lemma_map_path.parent.mkdir(parents=True, exist_ok=True)
+    log.info("Building graph from %s -> %s, %s", type(source).__name__, triples_path, lemma_map_path)
 
-    if relations is None:
-        relations = RELATIONS
+    triples_tmp = triples_path.with_name(triples_path.name + ".tmp")
+    lemma_map_tmp = lemma_map_path.with_name(lemma_map_path.name + ".tmp")
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    log.info("Building triples -> %s", output_path)
+    entities = triples = lemma_rows = 0
 
-    total_synsets = 0
-    total_triples = 0
+    with (
+        triples_tmp.open("w", encoding="utf-8") as triples_f,
+        lemma_map_tmp.open("w", encoding="utf-8") as lemma_f,
+    ):
+        for entity in source.iter_entities():
+            for rel_name, tail_id in entity.relations:
+                triples_f.write(f"{entity.id}\t{rel_name}\t{tail_id}\n")
+                triples += 1
+            for lemma in entity.lemmas:
+                lemma_f.write(f"{lemma}\t{entity.id}\n")
+                lemma_rows += 1
+            entities += 1
+            if entities % log_every == 0:
+                log.info("  %d entities processed, %d triples so far", entities, triples)
 
-    with output_path.open("w", encoding="utf-8") as f:
-        for synset in wn.all_synsets():
-            head = synset.name()
-            for rel_name, rel_fn in relations.items():
-                for tail_synset in rel_fn(synset):
-                    f.write(f"{head}\t{rel_name}\t{tail_synset.name()}\n")
-                    total_triples += 1
-            total_synsets += 1
-            if total_synsets % log_every == 0:
-                log.info("  %d synsets processed, %d triples so far", total_synsets, total_triples)
+    triples_tmp.replace(triples_path)
+    lemma_map_tmp.replace(lemma_map_path)
 
     log.info(
-        "Done: %d synsets, %d triples written to %s",
-        total_synsets,
-        total_triples,
-        output_path,
+        "Done: %d entities, %d triples -> %s, %d lemma rows -> %s",
+        entities, triples, triples_path, lemma_rows, lemma_map_path,
     )
-    return total_triples
-
-
-def build_lemma_synset_map(
-    output_path: Path = LEMMA_MAP_PATH,
-) -> int:
-    """Write a lemma -> synset_id mapping to output_path as TSV.
-
-    One row per (lemma, synset) pair. A polysemous word appears on multiple
-    rows (one per sense). Used downstream in export.py to derive per-lemma
-    embeddings by averaging the embedding vectors of all synsets that lemma
-    belongs to (Part 1 of the research doc, "From synset vectors to chunk
-    vectors").
-
-    Args:
-        output_path: destination path (.tsv).
-
-    Returns:
-        Total number of rows written.
-    """
-    from nltk.corpus import wordnet as wn
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    log.info("Building lemma-synset map -> %s", output_path)
-
-    count = 0
-    with output_path.open("w", encoding="utf-8") as f:
-        for synset in wn.all_synsets():
-            synset_id = synset.name()
-            for lemma in synset.lemmas():
-                f.write(f"{lemma.name()}\t{synset_id}\n")
-                count += 1
-
-    log.info("Done: %d lemma-synset rows written to %s", count, output_path)
-    return count
+    return GraphStats(entities, triples, lemma_rows)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--source", choices=sorted(SOURCES), default="wordnet",
+        help="Graph source to extract from (default: wordnet)",
+    )
     parser.add_argument(
         "--output", type=Path, default=TRIPLES_PATH,
         help=f"Triples TSV output path (default: {TRIPLES_PATH})",
@@ -159,16 +103,11 @@ def main() -> None:
         "--lemma-map-output", type=Path, default=LEMMA_MAP_PATH,
         help=f"Lemma-synset map output path (default: {LEMMA_MAP_PATH})",
     )
-    parser.add_argument(
-        "--skip-lemma-map", action="store_true",
-        help="Skip writing the lemma-synset map",
-    )
     args = parser.parse_args()
 
-    ensure_wordnet()
-    build_triples(args.output)
-    if not args.skip_lemma_map:
-        build_lemma_synset_map(args.lemma_map_output)
+    source = get_source(args.source)
+    source.ensure_available()
+    build_graph(source, args.output, args.lemma_map_output)
 
 
 if __name__ == "__main__":
